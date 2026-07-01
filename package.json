@@ -1,0 +1,26 @@
+{
+  "name": "investment-risk-analyzer",
+  "version": "1.0.0",
+  "description": "AI-Powered Investment Risk Analyzer",
+  "main": "backend/server.js",
+  "scripts": {
+    "client": "npm run dev --prefix client",
+    "server": "node backend/server.js",
+    "dev": "concurrently \"npm run server\" \"npm run client\"",
+    "install-all": "npm install && npm install --prefix backend && npm install --prefix client",
+    "seed-data": "node backend/scripts/seed.js"
+  },
+
+  {
+  "type": "module",
+  "dependencies": {
+    "csv-parse": "^5.5.6",
+    "express": "^4.19.2",
+    "cors": "^2.8.5"
+  }
+}
+,
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
