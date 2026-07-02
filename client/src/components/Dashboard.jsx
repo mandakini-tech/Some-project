@@ -31,7 +31,11 @@ const renderMarkdown = (mdText) => {
 
   const flushList = (key) => {
     if (currentList.length > 0) {
-      elements.push(<ul key={`list-${key}`}>{...currentList}</ul>);
+      elements.push(
+  <ul key={`list-${key}`}>
+    {currentList}
+  </ul>
+);
       currentList = [];
     }
   };
@@ -160,8 +164,18 @@ export default function Dashboard({
   };
 
   const holdings = portfolio.holdings || [];
-  const metrics = portfolio.riskMetrics || { beta: 0, volatility: 0, valueAtRisk: 0, diversificationScore: 100 };
-
+const metrics = {
+  beta: 0,
+  volatility: 0,
+  annualReturn: 0,
+  sharpeRatio: 0,
+  maxDrawdown: 0,
+  valueAtRisk: 0,
+  diversificationScore: 100,
+  agentLogs: [],
+  agentReport: "",
+  ...(portfolio?.riskMetrics || {}),
+};
   // Calculate dynamic parameters for charts
   const totalValue = holdings.reduce((sum, h) => sum + (h.shares * (h.currentPrice || h.buyPrice)), 0);
 
@@ -393,44 +407,50 @@ export default function Dashboard({
           <div className="risk-metrics-grid">
             <div className="metric-badge">
               <div className="metric-label">Weighted Beta</div>
-              <div className={`metric-val ${betaRisk.class}`}>{metrics.beta.toFixed(2)}</div>
+              <div className={`metric-val ${betaRisk.class}`}>{(metrics?.beta ?? 0).toFixed(2)}</div>
               <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '4px' }}>{betaRisk.text}</div>
             </div>
 
             <div className="metric-badge">
               <div className="metric-label">Annualized Vol</div>
-              <div className={`metric-val ${volRisk.class}`}>{(metrics.volatility * 100).toFixed(1)}%</div>
+              <div className={`metric-val ${volRisk.class}`}>
+  {((metrics?.volatility ?? 0) * 100).toFixed(1)}%
+</div>
               <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '4px' }}>{volRisk.text}</div>
             </div>
 
             <div className="metric-badge">
               <div className="metric-label">Annual Return</div>
-              <div className={`metric-val ${returnRisk.class}`}>{(metrics.annualReturn !== undefined ? metrics.annualReturn * 100 : 0).toFixed(1)}%</div>
-              <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '4px' }}>{returnRisk.text}</div>
+<div className={`metric-val ${returnRisk.class}`}>
+  {((metrics?.annualReturn ?? 0) * 100).toFixed(1)}%
+</div>              <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '4px' }}>{returnRisk.text}</div>
             </div>
 
             <div className="metric-badge">
               <div className="metric-label">Sharpe Ratio</div>
-              <div className={`metric-val ${sharpeRisk.class}`}>{metrics.sharpeRatio !== undefined ? metrics.sharpeRatio.toFixed(2) : '0.00'}</div>
+              <div className={`metric-val ${sharpeRisk.class}`}>{(metrics.sharpeRatio ?? 0).toFixed(2)}</div>
               <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '4px' }}>{sharpeRisk.text}</div>
             </div>
 
             <div className="metric-badge">
               <div className="metric-label">Max Drawdown</div>
-              <div className={`metric-val ${drawdownRisk.class}`}>{(metrics.maxDrawdown !== undefined ? metrics.maxDrawdown * 100 : 0).toFixed(1)}%</div>
+              <div className={`metric-val ${drawdownRisk.class}`}>{((metrics.maxDrawdown ?? 0) * 100).toFixed(1)}%</div>
               <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '4px' }}>{drawdownRisk.text}</div>
             </div>
 
             <div className="metric-badge">
               <div className="metric-label">Diversification Score</div>
-              <div className={`metric-val ${divRisk.class}`}>{metrics.diversificationScore}/100</div>
+              <div className={`metric-val ${divRisk.class}`}>{metrics.diversificationScore ?? 100}/100</div>
               <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '4px' }}>{divRisk.text}</div>
             </div>
 
             <div className="metric-badge" style={{ gridColumn: 'span 2' }}>
               <div className="metric-label">1-Day 95% Value-at-Risk (VaR)</div>
               <div className="metric-val text-blue" style={{ fontSize: '26px' }}>
-                ${metrics.valueAtRisk.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+               ${(metrics.valueAtRisk ?? 0).toLocaleString(undefined,{
+  minimumFractionDigits:2,
+  maximumFractionDigits:2
+})}
               </div>
               <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '4px' }}>
                 Maximum statistical daily loss at 95% confidence level

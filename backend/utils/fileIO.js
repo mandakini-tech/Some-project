@@ -3,7 +3,7 @@ import path from "node:path";
 import { parse } from "csv-parse/sync";
 
 const dataDir = path.resolve(process.cwd(), "backend", "data");
-const rootCsvPath = path.resolve(process.cwd(), "StockPriceDataset.csv");
+const rootCsvPath = path.resolve(process.cwd(), "../StockPriceDataset.csv");
 
 export async function ensureDataDir() {
   await fs.mkdir(dataDir, { recursive: true });

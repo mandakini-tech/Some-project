@@ -1,4 +1,4 @@
-const BASE = import.meta.env.VITE_API_URL || "[localhost](http://localhost:5000)";
+const BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 export async function getTickerRisk(ticker) {
   const res = await fetch(`${BASE}/api/risk/${encodeURIComponent(ticker)}`);
