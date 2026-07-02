@@ -16,9 +16,9 @@ async function ensureLocalData(ticker) {
     await runPython([script, ticker]);
     return true;
   } catch (e) {
-    // swallow; fallback flows will handle
-    return false;
-  }
+  console.error("Python download failed:", e);
+  return false;
+}
 }
 
 export async function analyzeTicker(ticker) {
@@ -26,7 +26,14 @@ export async function analyzeTicker(ticker) {
   const got = await ensureLocalData(t);
 
   // Load asset CSV (from local or root fallback)
-  const assetRows = await loadLocalOrRootCSV(t);
+  let assetRows;
+
+try {
+  assetRows = await loadLocalOrRootCSV(t);
+} catch (err) {
+  console.error("CSV loading failed:", err);
+  throw err;
+}
 
   // Ensure SPY for market
   await ensureLocalData("SPY").catch(()=>{});
@@ -91,20 +98,40 @@ export async function analyzePortfolioRisk(holdings = []) {
       agentLogs: [],
     };
   }
+const results = [];
 
-  const results = [];
+for (const holding of holdings) {
+  try {
+    console.log("Analyzing:", holding.ticker);
 
-  for (const holding of holdings) {
-    try {
-      const analysis = await analyzeTicker(holding.ticker);
-      results.push({
-        holding,
-        analysis,
-      });
-    } catch (err) {
-      console.error(`Error analyzing ${holding.ticker}:`, err.message);
-    }
+    const analysis = await analyzeTicker(holding.ticker);
+
+    results.push({
+      holding,
+      analysis
+    });
+
+  } catch (err) {
+    console.error(`Error analyzing ${holding.ticker}:`, err);
+
+    results.push({
+      holding,
+      analysis: {
+        ticker: holding.ticker,
+        stats: {
+          beta: 0,
+          volatilityAnnualized: 0,
+          var95: 0,
+          lastPrice: holding.buyPrice
+        },
+        info: {
+          sector: "Unknown"
+        },
+        reportMarkdown: `Unable to analyze ${holding.ticker}.`
+      }
+    });
   }
+}
 
   const totalValue = results.reduce(
     (sum, r) =>
@@ -137,10 +164,10 @@ export async function analyzePortfolioRisk(holdings = []) {
       beta,
       volatility,
       valueAtRisk: var95,
-      diversificationScore: Math.max(
-        0,
-        100 - Math.max(0, holdings.length - 1) * 10
-      ),
+      diversificationScore:
+  holdings.length <= 1
+    ? 20
+    : Math.min(100, holdings.length * 20),
       annualReturn: 0,
       sharpeRatio: 0,
       maxDrawdown: 0,

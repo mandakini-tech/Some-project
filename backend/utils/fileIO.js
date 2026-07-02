@@ -2,42 +2,70 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { parse } from "csv-parse/sync";
 
-const dataDir = path.resolve(process.cwd(), "backend", "data");
-const rootCsvPath = path.resolve(process.cwd(), "../StockPriceDataset.csv");
+const projectRoot = path.resolve(process.cwd(), "..");
+const dataDir = path.join(projectRoot, "backend", "data");
+const rootCsvPath = path.join(projectRoot, "StockPriceDataset.csv");
 
 export async function ensureDataDir() {
   await fs.mkdir(dataDir, { recursive: true });
-  return dataDir;
 }
 
-export function tickerPaths(t) {
-  const ticker = t.toUpperCase();
+export function tickerPaths(ticker) {
+  ticker = ticker.toUpperCase();
+
   return {
     csv: path.join(dataDir, `${ticker}.csv`),
     info: path.join(dataDir, `${ticker}_info.json`),
-    news: path.join(dataDir, `${ticker}_news.json`),
+    news: path.join(dataDir, `${ticker}_news.json`)
   };
 }
 
-export async function fileExists(p) {
-  try { await fs.access(p); return true; } catch { return false; }
+export async function fileExists(file) {
+  try {
+    await fs.access(file);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
-export async function readJSON(p, fallback = null) {
-  try { return JSON.parse(await fs.readFile(p, "utf-8")); } catch { return fallback; }
+export async function readJSON(file, fallback = null) {
+  try {
+    const txt = await fs.readFile(file, "utf8");
+    return JSON.parse(txt);
+  } catch {
+    return fallback;
+  }
 }
 
-export async function readCSV(p) {
-  const raw = await fs.readFile(p, "utf-8");
-  return parse(raw, { columns: true, skip_empty_lines: true });
+export async function readCSV(file) {
+  const txt = await fs.readFile(file, "utf8");
+
+  return parse(txt, {
+    columns: true,
+    skip_empty_lines: true,
+  });
 }
 
 export async function loadLocalOrRootCSV(ticker) {
   const { csv } = tickerPaths(ticker);
-  if (await fileExists(csv)) return await readCSV(csv);
-  // fallback: root dataset
+
+  if (await fileExists(csv)) {
+    console.log("Using local CSV:", csv);
+    return readCSV(csv);
+  }
+
+  console.log("Using root CSV:", rootCsvPath);
+
   const rows = await readCSV(rootCsvPath);
-  const filtered = rows.filter(r => (r.Ticker || r.ticker || "").toUpperCase() === ticker.toUpperCase());
-  if (filtered.length) return filtered;
-  throw new Error(`No CSV data for ${ticker}`);
+
+  const filtered = rows.filter(
+    r => (r.Ticker || "").toUpperCase() === ticker.toUpperCase()
+  );
+
+  if (!filtered.length) {
+    throw new Error(`Ticker ${ticker} not found in StockPriceDataset.csv`);
+  }
+
+  return filtered;
 }
