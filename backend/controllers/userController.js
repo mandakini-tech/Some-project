@@ -1,35 +1,38 @@
-const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
-const User = require('../models/User');
-const { dbState } = require('../Config/db');
+import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";
 
-// JWT Generator
+import User from "../models/User.js";
+import { dbState } from "../Config/db.js";
+
+// Generate JWT
 const generateToken = (userId) => {
   return jwt.sign(
     { user: { id: userId } },
-    process.env.JWT_SECRET || 'supersecretjwtkeyforinvestorriskanalyzer',
-    { expiresIn: '7d' }
+    process.env.JWT_SECRET || "supersecretjwtkeyforinvestorriskanalyzer",
+    { expiresIn: "7d" }
   );
 };
 
 // Register User
-exports.registerUser = async (req, res) => {
+const registerUser = async (req, res) => {
   const { username, password } = req.body;
 
   if (!username || !password) {
-    return res.status(400).json({ msg: 'Please enter all fields' });
+    return res.status(400).json({ msg: "Please enter all fields" });
   }
 
   try {
     if (dbState.isFallback) {
-      // JSON Fallback Flow
       const data = dbState.readFallbackData();
-      const existingUser = data.users.find(u => u.username.toLowerCase() === username.toLowerCase());
+
+      const existingUser = data.users.find(
+        (u) => u.username.toLowerCase() === username.toLowerCase()
+      );
+
       if (existingUser) {
-        return res.status(400).json({ msg: 'User already exists' });
+        return res.status(400).json({ msg: "User already exists" });
       }
 
-      // Hash password
       const salt = await bcrypt.genSalt(10);
       const hashedPassword = await bcrypt.hash(password, salt);
 
@@ -37,103 +40,146 @@ exports.registerUser = async (req, res) => {
         id: `user_${Date.now()}`,
         username,
         password: hashedPassword,
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
       };
 
       data.users.push(newUser);
       dbState.writeFallbackData(data);
 
       const token = generateToken(newUser.id);
-      return res.status(201).json({ token, user: { id: newUser.id, username } });
 
-    } else {
-      // MongoDB Flow
-      let user = await User.findOne({ username });
-      if (user) {
-        return res.status(400).json({ msg: 'User already exists' });
-      }
-
-      user = new User({ username, password });
-
-      // Hash password
-      const salt = await bcrypt.genSalt(10);
-      user.password = await bcrypt.hash(password, salt);
-      await user.save();
-
-      const token = generateToken(user.id);
-      return res.status(201).json({ token, user: { id: user.id, username } });
+      return res.status(201).json({
+        token,
+        user: {
+          id: newUser.id,
+          username,
+        },
+      });
     }
+
+    let user = await User.findOne({ username });
+
+    if (user) {
+      return res.status(400).json({ msg: "User already exists" });
+    }
+
+    const salt = await bcrypt.genSalt(10);
+
+    user = new User({
+      username,
+      password: await bcrypt.hash(password, salt),
+    });
+
+    await user.save();
+
+    const token = generateToken(user.id);
+
+    return res.status(201).json({
+      token,
+      user: {
+        id: user.id,
+        username,
+      },
+    });
   } catch (err) {
-    console.error('Register error:', err.message);
-    res.status(500).send('Server error during registration');
+    console.error(err);
+    res.status(500).send("Server error during registration");
   }
 };
 
 // Login User
-exports.loginUser = async (req, res) => {
+const loginUser = async (req, res) => {
   const { username, password } = req.body;
 
   if (!username || !password) {
-    return res.status(400).json({ msg: 'Please enter all fields' });
+    return res.status(400).json({ msg: "Please enter all fields" });
   }
 
   try {
     if (dbState.isFallback) {
-      // JSON Fallback Flow
       const data = dbState.readFallbackData();
-      const user = data.users.find(u => u.username.toLowerCase() === username.toLowerCase());
+
+      const user = data.users.find(
+        (u) => u.username.toLowerCase() === username.toLowerCase()
+      );
+
       if (!user) {
-        return res.status(400).json({ msg: 'Invalid credentials' });
+        return res.status(400).json({ msg: "Invalid credentials" });
       }
 
       const isMatch = await bcrypt.compare(password, user.password);
+
       if (!isMatch) {
-        return res.status(400).json({ msg: 'Invalid credentials' });
+        return res.status(400).json({ msg: "Invalid credentials" });
       }
 
       const token = generateToken(user.id);
-      return res.json({ token, user: { id: user.id, username } });
 
-    } else {
-      // MongoDB Flow
-      const user = await User.findOne({ username });
-      if (!user) {
-        return res.status(400).json({ msg: 'Invalid credentials' });
-      }
-
-      const isMatch = await bcrypt.compare(password, user.password);
-      if (!isMatch) {
-        return res.status(400).json({ msg: 'Invalid credentials' });
-      }
-
-      const token = generateToken(user.id);
-      return res.json({ token, user: { id: user.id, username } });
+      return res.json({
+        token,
+        user: {
+          id: user.id,
+          username,
+        },
+      });
     }
+
+    const user = await User.findOne({ username });
+
+    if (!user) {
+      return res.status(400).json({ msg: "Invalid credentials" });
+    }
+
+    const isMatch = await bcrypt.compare(password, user.password);
+
+    if (!isMatch) {
+      return res.status(400).json({ msg: "Invalid credentials" });
+    }
+
+    const token = generateToken(user.id);
+
+    return res.json({
+      token,
+      user: {
+        id: user.id,
+        username,
+      },
+    });
   } catch (err) {
-    console.error('Login error:', err.message);
-    res.status(500).send('Server error during login');
+    console.error(err);
+    res.status(500).send("Server error during login");
   }
 };
 
 // Get User Profile
-exports.getUserProfile = async (req, res) => {
+const getUserProfile = async (req, res) => {
   try {
     if (dbState.isFallback) {
       const data = dbState.readFallbackData();
-      const user = data.users.find(u => u.id === req.user.id);
+
+      const user = data.users.find((u) => u.id === req.user.id);
+
       if (!user) {
-        return res.status(404).json({ msg: 'User not found' });
+        return res.status(404).json({ msg: "User not found" });
       }
-      return res.json({ id: user.id, username: user.username });
-    } else {
-      const user = await User.findById(req.user.id).select('-password');
-      if (!user) {
-        return res.status(404).json({ msg: 'User not found' });
-      }
-      return res.json(user);
+
+      return res.json({
+        id: user.id,
+        username: user.username,
+      });
     }
+
+    const user = await User.findById(req.user.id).select("-password");
+
+    if (!user) {
+      return res.status(404).json({ msg: "User not found" });
+    }
+
+    res.json(user);
   } catch (err) {
-    console.error('Get profile error:', err.message);
-    res.status(500).send('Server error fetching profile');
+    console.error(err);
+    res.status(500).send("Server error fetching profile");
   }
 };
+
+export { registerUser, loginUser, getUserProfile };

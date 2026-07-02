@@ -1,6 +1,6 @@
-const Portfolio = require('../models/Portfolio');
-const { analyzePortfolioRisk } = require('../Services/aiservices');
-const { dbState } = require('../Config/db');
+import Portfolio from "../models/Portfolio.js";
+import { analyzePortfolioRisk } from "../Services/aiservices.js";
+import { dbState } from "../Config/db.js";
 
 // Helper to get fallback portfolio or create if not exists
 const getFallbackPortfolio = (userId, data) => {
@@ -30,7 +30,7 @@ const getFallbackPortfolio = (userId, data) => {
 // @desc    Get current user portfolio
 // @route   GET /api/portfolio
 // @access  Private
-exports.getPortfolio = async (req, res) => {
+const getPortfolio = async  (req, res) => {
   try {
     if (dbState.isFallback) {
       const data = dbState.readFallbackData();
@@ -53,7 +53,7 @@ exports.getPortfolio = async (req, res) => {
 // @desc    Add stock holding to portfolio
 // @route   POST /api/portfolio/holdings
 // @access  Private
-exports.addHolding = async (req, res) => {
+const addHolding = async (req, res) => {
   let { ticker, shares, buyPrice } = req.body;
 
   if (!ticker || !shares || !buyPrice) {
@@ -146,7 +146,7 @@ exports.addHolding = async (req, res) => {
 // @desc    Delete stock holding from portfolio
 // @route   DELETE /api/portfolio/holdings/:ticker
 // @access  Private
-exports.removeHolding = async (req, res) => {
+const removeHolding = async (req, res) => {
   const ticker = req.params.ticker.toUpperCase().trim();
 
   try {
@@ -209,7 +209,7 @@ exports.removeHolding = async (req, res) => {
 // @desc    Re-analyze portfolio and get detailed Multi-Agent report
 // @route   POST /api/portfolio/analyze
 // @access  Private
-exports.analyzePortfolio = async (req, res) => {
+const analyzePortfolio = async (req, res) => {
   try {
     if (dbState.isFallback) {
       const data = dbState.readFallbackData();
@@ -267,4 +267,11 @@ exports.analyzePortfolio = async (req, res) => {
     console.error('Analyze portfolio error:', err.message);
     res.status(500).send('Server error running risk analysis');
   }
+};
+
+export {
+  getPortfolio,
+  addHolding,
+  removeHolding,
+  analyzePortfolio,
 };

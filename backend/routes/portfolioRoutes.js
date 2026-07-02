@@ -1,25 +1,24 @@
-const express = require('express');
-const router = express.Router();
-const portfolioController = require('../controllers/portfolioController');
-const authMiddleware = require('../middleware/authMiddleware');
+import express from "express";
 
-// All routes here are private and require authorization header
+import authMiddleware from "../middleware/authMiddleware.js";
+
+import {
+  getPortfolio,
+  addHolding,
+  removeHolding,
+  analyzePortfolio,
+} from "../controllers/portfolioController.js";
+
+const router = express.Router();
+
 router.use(authMiddleware);
 
-// @route   GET api/portfolio
-// @desc    Get user portfolio and risk stats
-router.get('/', portfolioController.getPortfolio);
+router.get("/", getPortfolio);
 
-// @route   POST api/portfolio/holdings
-// @desc    Add or update holding in portfolio
-router.post('/holdings', portfolioController.addHolding);
+router.post("/holdings", addHolding);
 
-// @route   DELETE api/portfolio/holdings/:ticker
-// @desc    Remove holding from portfolio
-router.delete('/holdings/:ticker', portfolioController.removeHolding);
+router.delete("/holdings/:ticker", removeHolding);
 
-// @route   POST api/portfolio/analyze
-// @desc    Trigger LangChain multi-agent risk analysis
-router.post('/analyze', portfolioController.analyzePortfolio);
+router.post("/analyze", analyzePortfolio);
 
-module.exports = router;
+export default router;

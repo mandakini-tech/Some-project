@@ -1,10 +1,10 @@
 import { Router } from "express";
 import { analyzeTicker } from "../Services/aiservices.js";
 
-const r = Router();
+const router = Router();
 
 // GET /api/risk/:ticker
-r.get("/:ticker", async (req, res) => {
+router.get("/:ticker", async (req, res) => {
   try {
     const data = await analyzeTicker(req.params.ticker);
     res.json({ ok: true, data });
@@ -15,7 +15,7 @@ r.get("/:ticker", async (req, res) => {
 
 // POST /api/risk/portfolio
 // body: { holdings: [{ ticker, shares, avgPrice }], market: "SPY" }
-r.post("/portfolio", async (req, res) => {
+router.post("/portfolio", async (req, res) => {
   const { holdings = [], market = "SPY" } = req.body || {};
   try {
     const per = [];
@@ -42,4 +42,4 @@ r.post("/portfolio", async (req, res) => {
   }
 });
 
-export default r;
+export default router;

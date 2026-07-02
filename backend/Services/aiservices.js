@@ -74,3 +74,82 @@ export async function analyzeTicker(ticker) {
     reportMarkdown: md
   };
 }
+export async function analyzePortfolioRisk(holdings = []) {
+  if (!holdings.length) {
+    return {
+      metrics: {
+        beta: 0,
+        volatility: 0,
+        valueAtRisk: 0,
+        diversificationScore: 100,
+        annualReturn: 0,
+        sharpeRatio: 0,
+        maxDrawdown: 0,
+      },
+      holdings: [],
+      agentReport: "Portfolio is empty.",
+      agentLogs: [],
+    };
+  }
+
+  const results = [];
+
+  for (const holding of holdings) {
+    try {
+      const analysis = await analyzeTicker(holding.ticker);
+      results.push({
+        holding,
+        analysis,
+      });
+    } catch (err) {
+      console.error(`Error analyzing ${holding.ticker}:`, err.message);
+    }
+  }
+
+  const totalValue = results.reduce(
+    (sum, r) =>
+      sum + (r.holding.shares || 0) * (r.analysis.stats.lastPrice || 0),
+    0
+  );
+
+  let beta = 0;
+  let volatility = 0;
+  let var95 = 0;
+
+  for (const r of results) {
+    const value =
+      (r.holding.shares || 0) * (r.analysis.stats.lastPrice || 0);
+
+    const weight = totalValue > 0 ? value / totalValue : 0;
+
+    beta += weight * (r.analysis.stats.beta || 0);
+
+    volatility +=
+      Math.pow(weight * (r.analysis.stats.volatilityAnnualized || 0), 2);
+
+    var95 += weight * (r.analysis.stats.var95 || 0);
+  }
+
+  volatility = Math.sqrt(volatility);
+
+  return {
+    metrics: {
+      beta,
+      volatility,
+      valueAtRisk: var95,
+      diversificationScore: Math.max(
+        0,
+        100 - Math.max(0, holdings.length - 1) * 10
+      ),
+      annualReturn: 0,
+      sharpeRatio: 0,
+      maxDrawdown: 0,
+    },
+    holdings: results,
+    agentReport: `Portfolio analyzed successfully with ${results.length} holdings.`,
+    agentLogs: [
+      `Processed ${results.length} holdings.`,
+      "Risk metrics calculated.",
+    ],
+  };
+}

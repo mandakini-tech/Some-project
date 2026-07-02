@@ -1,48 +1,54 @@
 import express from "express";
 import cors from "cors";
+import dotenv from "dotenv";
+
+import { connectDB, dbState } from "./Config/db.js";
+
+import userRoutes from "./routes/userRoutes.js";
+import portfolioRoutes from "./routes/portfolioRoutes.js";
 import riskRoutes from "./routes/risk.js";
-// ...other imports (auth, portfolios) you already have
 
-const app = express();
-app.use(cors());
-app.use(express.json());
-
-app.use("/api/risk", riskRoutes);
-
-
-require('dotenv').config();
-const express = require('express');
-const cors = require('cors');
-const { connectDB } = require('./Config/db');
+dotenv.config();
 
 const app = express();
 
-// 1. Establish Database Connection (gracefully handles failure)
+// Connect Database
 connectDB();
 
-// 2. Setup Middlewares
+// Middlewares
 app.use(cors());
 app.use(express.json());
 
-// 3. Define Route Middlewares
-app.use('/api/users', require('./routes/userRoutes'));
-app.use('/api/portfolio', require('./routes/portfolioRoutes'));
+// Routes
+app.use("/api/users", userRoutes);
+app.use("/api/portfolio", portfolioRoutes);
+app.use("/api/risk", riskRoutes);
 
-// Root diagnostic route
-app.get('/api/health', (req, res) => {
-  const { dbState } = require('./Config/db');
+// Health Check Route
+app.get("/api/health", (req, res) => {
   res.json({
-    status: 'healthy',
-    database: dbState.isFallback ? 'fallback-json-file' : 'mongodb-connection',
-    timestamp: new Date().toISOString()
+    status: "healthy",
+    database: dbState.isFallback
+      ? "fallback-json-file"
+      : "mongodb-connection",
+    timestamp: new Date().toISOString(),
   });
 });
 
-// 4. Listen on Port
+// Root Route
+app.get("/", (req, res) => {
+  res.json({
+    message: "Investment Risk Analyzer API is running",
+  });
+});
+
+// Start Server
 const PORT = process.env.PORT || 5000;
+
 app.listen(PORT, () => {
-  console.log(`===================================================`);
-  console.log(`🚀 Investment Risk Analyzer server running on port ${PORT}`);
-  console.log(`🌐 API Health Endpoint: http://localhost:${PORT}/api/health`);
-  console.log(`===================================================`);
+  console.log("===================================================");
+  console.log(`🚀 Investment Risk Analyzer Server running on port ${PORT}`);
+  console.log(`🌐 API: http://localhost:${PORT}`);
+  console.log(`❤️ Health: http://localhost:${PORT}/api/health`);
+  console.log("===================================================");
 });
