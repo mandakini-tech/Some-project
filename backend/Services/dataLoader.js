@@ -119,8 +119,18 @@ function parseCSV(filePath) {
     
     const date = cols[dateIdx].trim();
     // Default to Adj Close if Close is NaN, or vice versa
-    const close = parseFloat(cols[closeIdx]) || parseFloat(cols[adjCloseIdx]) || 0;
-    if (date && !isNaN(close)) {
+let close = Number(cols[closeIdx]);
+
+if (Number.isNaN(close) && adjCloseIdx !== -1) {
+    close = Number(cols[adjCloseIdx]);
+}
+
+if (!Number.isNaN(close)) {
+    history.push({
+        date,
+        close
+    });
+}    if (date && !isNaN(close)) {
       history.push({ date, close });
     }
   }
@@ -270,7 +280,9 @@ async function loadTickerData(ticker, logs = []) {
   let news = [];
   if (fs.existsSync(newsPath)) {
     try {
-      news = JSON.parse(fs.readFileSync(newsPath, 'utf8'));
+      const parsed = JSON.parse(fs.readFileSync(newsPath, "utf8"));
+
+news = parsed.news || [];
     } catch (e) {
       logs.push(`DataLoader: Error parsing news JSON for ${tickerKey}: ${e.message}`);
     }
@@ -287,6 +299,7 @@ async function loadTickerData(ticker, logs = []) {
   let cashflow = null;
   let dividends = null;
 
+
   try {
     if (fs.existsSync(incomePath)) incomeStatement = JSON.parse(fs.readFileSync(incomePath, 'utf8'));
     if (fs.existsSync(balanceSheetPath)) balanceSheet = JSON.parse(fs.readFileSync(balanceSheetPath, 'utf8'));
@@ -295,11 +308,43 @@ async function loadTickerData(ticker, logs = []) {
   } catch (e) {
     logs.push(`DataLoader: Error reading additional financial files for ${tickerKey}: ${e.message}`);
   }
+const latestClose =
+  history.length > 0
+    ? Number(history[history.length - 1].close)
+    : NaN;
+
+const currentPrice =
+  !Number.isNaN(latestClose)
+    ? latestClose
+    : (!Number.isNaN(Number(info.currentPrice))
+        ? Number(info.currentPrice)
+        : 100);
+
+  const latestClose =
+  history.length > 0
+    ? Number(history[history.length - 1].close)
+    : NaN;
+
+const currentPrice =
+  !Number.isNaN(latestClose)
+    ? latestClose
+    : (!Number.isNaN(Number(info.currentPrice))
+        ? Number(info.currentPrice)
+        : 100);
+
+console.log("================================");
+console.log("Ticker:", tickerKey);
+console.log("Info Path:", infoPath);
+console.log("Sector:", info.sector);
+console.log("Industry:", info.industry);
+console.log("Current Price:", currentPrice);
+console.log("================================");
+
 
   return {
     ticker: tickerKey,
-    currentPrice: info.currentPrice || (history.length > 0 ? history[history.length - 1].close : 100),
-    sector: info.sector || 'Other',
+    currentPrice,
+    sector: info.sector || info.industry || "Unknown",
     longName: info.longName || tickerKey,
     history,
     info,

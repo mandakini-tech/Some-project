@@ -25,13 +25,16 @@ def download_all(ticker, out_dir):
     info = tk.fast_info if hasattr(tk, "fast_info") else {}
     full_info = tk.info if hasattr(tk, "info") else {}
     info_obj = {
-        "ticker": ticker,
-        "sector": full_info.get("sector"),
-        "industry": full_info.get("industry"),
-        "longName": full_info.get("longName") or full_info.get("shortName"),
-        "marketCap": full_info.get("marketCap"),
-        "currency": full_info.get("currency") or info.get("currency"),
-    }
+    "ticker": ticker,
+    "sector": full_info.get("sector"),
+    "industry": full_info.get("industry"),
+    "longName": full_info.get("longName") or full_info.get("shortName"),
+    "marketCap": full_info.get("marketCap"),
+    "currency": full_info.get("currency") or info.get("currency"),
+    "currentPrice": full_info.get("currentPrice") or info.get("lastPrice"),
+    "previousClose": full_info.get("previousClose"),
+    "exchange": full_info.get("exchange"),
+}
     info_path = os.path.join(out_dir, f"{ticker}_info.json")
     with open(info_path, "w", encoding="utf-8") as f:
         json.dump(info_obj, f, ensure_ascii=False)

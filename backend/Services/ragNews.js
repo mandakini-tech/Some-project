@@ -10,6 +10,9 @@ const STATIC_INFO = (t)=>({
 export async function loadInfo(ticker) {
   const { info } = tickerPaths(ticker);
   if (await fileExists(info)) return await readJSON(info, STATIC_INFO(ticker));
+  console.log("========== INFO ==========");
+console.log(info);
+console.log("==========================");
   return STATIC_INFO(ticker);
 }
 

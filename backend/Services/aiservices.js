@@ -172,7 +172,24 @@ for (const holding of holdings) {
       sharpeRatio: 0,
       maxDrawdown: 0,
     },
-    holdings: results,
+    holdings: results.map(r => ({
+  ticker: r.holding.ticker,
+  shares: r.holding.shares,
+  buyPrice: r.holding.buyPrice,
+
+  currentPrice: r.analysis.stats.lastPrice,
+  currentValue: r.holding.shares * r.analysis.stats.lastPrice,
+
+  sector: r.analysis.info.sector,
+  industry: r.analysis.info.industry,
+  longName: r.analysis.info.longName,
+
+  beta: r.analysis.stats.beta,
+  volatility: r.analysis.stats.volatilityAnnualized,
+  valueAtRisk: r.analysis.stats.var95,
+
+  report: r.analysis.reportMarkdown
+})),
     agentReport: `Portfolio analyzed successfully with ${results.length} holdings.`,
     agentLogs: [
       `Processed ${results.length} holdings.`,

@@ -57,6 +57,8 @@ async function runMarketAgent(holdings, logs) {
     const history = stockData.history;
     const currentPrice = stockData.currentPrice;
     const value = shares * currentPrice;
+    holding.currentPrice = currentPrice;
+holding.marketValue = value;
     totalPortfolioValue += value;
 
     // Calculate daily returns for this stock
@@ -130,7 +132,10 @@ async function runMarketAgent(holdings, logs) {
   // Calculate weights and group sectors
   holdingsMetrics.forEach(h => {
     h.weight = totalPortfolioValue > 0 ? (h.value / totalPortfolioValue) * 100 : 0;
-    const sector = h.sector || 'Other';
+    sector:
+    info.sector ||
+    info.industry ||
+    "Unknown",
     sectorAllocations[sector] = (sectorAllocations[sector] || 0) + (h.weight / 100);
   });
 
