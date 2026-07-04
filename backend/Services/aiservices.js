@@ -98,102 +98,189 @@ export async function analyzePortfolioRisk(holdings = []) {
       agentLogs: [],
     };
   }
-const results = [];
 
-for (const holding of holdings) {
-  try {
-    console.log("Analyzing:", holding.ticker);
+  const enrichedHoldings = [];
 
-    const analysis = await analyzeTicker(holding.ticker);
+  let totalValue = 0;
 
-    results.push({
-      holding,
-      analysis
-    });
+  for (const holding of holdings) {
+    try {
+      const result = await analyzeTicker(holding.ticker);
 
-  } catch (err) {
-    console.error(`Error analyzing ${holding.ticker}:`, err);
+      const currentPrice =
+        Number(result.stats.lastPrice) || Number(holding.buyPrice);
 
-    results.push({
-      holding,
-      analysis: {
+      const currentValue =
+        Number(holding.shares) * currentPrice;
+
+      totalValue += currentValue;
+
+      enrichedHoldings.push({
+        ticker: holding.ticker.toUpperCase(),
+
+        shares: Number(holding.shares),
+
+        buyPrice: Number(holding.buyPrice),
+
+        currentPrice,
+
+        currentValue,
+
+        sector:
+          result.info.sector ||
+          "Unknown",
+
+        industry:
+          result.info.industry ||
+          "Unknown",
+
+        longName:
+          result.info.longName ||
+          holding.ticker,
+
+        beta:
+          result.stats.beta || 0,
+
+        volatility:
+          result.stats.volatilityAnnualized || 0,
+
+        valueAtRisk:
+          result.stats.var95 || 0,
+
+        annualReturn:
+          result.stats.annualReturn || 0,
+
+        report:
+          result.reportMarkdown
+      });
+
+    } catch (err) {
+
+      console.error(
+        "Analysis failed:",
+        holding.ticker,
+        err.message
+      );
+
+      enrichedHoldings.push({
         ticker: holding.ticker,
-        stats: {
-          beta: 0,
-          volatilityAnnualized: 0,
-          var95: 0,
-          lastPrice: holding.buyPrice
-        },
-        info: {
-          sector: "Unknown"
-        },
-        reportMarkdown: `Unable to analyze ${holding.ticker}.`
-      }
-    });
-  }
-}
 
-  const totalValue = results.reduce(
-    (sum, r) =>
-      sum + (r.holding.shares || 0) * (r.analysis.stats.lastPrice || 0),
-    0
-  );
+        shares: holding.shares,
+
+        buyPrice: holding.buyPrice,
+
+        currentPrice: holding.buyPrice,
+
+        currentValue:
+          holding.buyPrice * holding.shares,
+
+        sector: "Unknown",
+
+        industry: "Unknown",
+
+        longName: holding.ticker,
+
+        beta: 0,
+
+        volatility: 0,
+
+        valueAtRisk: 0,
+
+        annualReturn: 0,
+
+        report: `Unable to analyze ${holding.ticker}`
+      });
+    }
+  }
+
+  //---------------------------------------------------
+  // Portfolio aggregation
+  //---------------------------------------------------
 
   let beta = 0;
-  let volatility = 0;
+
+  let volatilitySquared = 0;
+
   let var95 = 0;
 
-  for (const r of results) {
-    const value =
-      (r.holding.shares || 0) * (r.analysis.stats.lastPrice || 0);
+  let annualReturn = 0;
 
-    const weight = totalValue > 0 ? value / totalValue : 0;
+  for (const h of enrichedHoldings) {
 
-    beta += weight * (r.analysis.stats.beta || 0);
+    const weight =
+      totalValue > 0
+        ? h.currentValue / totalValue
+        : 0;
 
-    volatility +=
-      Math.pow(weight * (r.analysis.stats.volatilityAnnualized || 0), 2);
+    beta +=
+      weight * h.beta;
 
-    var95 += weight * (r.analysis.stats.var95 || 0);
+    volatilitySquared +=
+      Math.pow(
+        weight * h.volatility,
+        2
+      );
+
+    var95 +=
+      weight * h.valueAtRisk;
+
+    annualReturn +=
+      weight * h.annualReturn;
   }
 
-  volatility = Math.sqrt(volatility);
+  const volatility =
+    Math.sqrt(volatilitySquared);
+
+  const sharpeRatio =
+    volatility > 0
+      ? annualReturn / volatility
+      : 0;
+
+  const sectorCount =
+    new Set(
+      enrichedHoldings.map(
+        h => h.sector
+      )
+    ).size;
+
+  const diversificationScore =
+    Math.min(
+      100,
+      sectorCount * 25
+    );
 
   return {
+
     metrics: {
+
       beta,
+
       volatility,
+
       valueAtRisk: var95,
-      diversificationScore:
-  holdings.length <= 1
-    ? 20
-    : Math.min(100, holdings.length * 20),
-      annualReturn: 0,
-      sharpeRatio: 0,
+
+      diversificationScore,
+
+      annualReturn,
+
+      sharpeRatio,
+
       maxDrawdown: 0,
+
     },
-    holdings: results.map(r => ({
-  ticker: r.holding.ticker,
-  shares: r.holding.shares,
-  buyPrice: r.holding.buyPrice,
 
-  currentPrice: r.analysis.stats.lastPrice,
-  currentValue: r.holding.shares * r.analysis.stats.lastPrice,
+    holdings:
+      enrichedHoldings,
 
-  sector: r.analysis.info.sector,
-  industry: r.analysis.info.industry,
-  longName: r.analysis.info.longName,
+    agentReport:
+      `Portfolio analyzed successfully with ${enrichedHoldings.length} holdings.`,
 
-  beta: r.analysis.stats.beta,
-  volatility: r.analysis.stats.volatilityAnnualized,
-  valueAtRisk: r.analysis.stats.var95,
-
-  report: r.analysis.reportMarkdown
-})),
-    agentReport: `Portfolio analyzed successfully with ${results.length} holdings.`,
     agentLogs: [
-      `Processed ${results.length} holdings.`,
+
+      `Processed ${enrichedHoldings.length} holdings.`,
+
       "Risk metrics calculated.",
-    ],
+
+    ]
   };
 }

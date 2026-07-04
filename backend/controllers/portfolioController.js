@@ -30,23 +30,76 @@ const getFallbackPortfolio = (userId, data) => {
 // @desc    Get current user portfolio
 // @route   GET /api/portfolio
 // @access  Private
-const getPortfolio = async  (req, res) => {
+const getPortfolio = async (req, res) => {
   try {
+
+    let portfolio;
+
     if (dbState.isFallback) {
+
       const data = dbState.readFallbackData();
-      const portfolio = getFallbackPortfolio(req.user.id, data);
-      return res.json(portfolio);
+
+      portfolio = getFallbackPortfolio(req.user.id, data);
+
     } else {
-      let portfolio = await Portfolio.findOne({ user: req.user.id });
+
+      portfolio = await Portfolio.findOne({
+        user: req.user.id
+      });
+
       if (!portfolio) {
-        portfolio = new Portfolio({ user: req.user.id, holdings: [] });
+
+        portfolio = new Portfolio({
+          user: req.user.id,
+          holdings: []
+        });
+
         await portfolio.save();
       }
-      return res.json(portfolio);
     }
+
+    const analysis =
+      await analyzePortfolioRisk(
+        portfolio.holdings
+      );
+
+    portfolio.riskMetrics = {
+
+      ...portfolio.riskMetrics,
+
+      ...analysis.metrics,
+
+      lastAnalyzed: new Date(),
+
+      agentReport:
+        analysis.agentReport,
+
+      agentLogs:
+        analysis.agentLogs
+    };
+
+    return res.json({
+
+      ...(portfolio.toObject
+          ? portfolio.toObject()
+          : portfolio),
+
+      holdings:
+        analysis.holdings,
+
+      riskMetrics:
+        portfolio.riskMetrics
+
+    });
+
   } catch (err) {
-    console.error('Get portfolio error:', err.message);
-    res.status(500).send('Server error retrieving portfolio');
+
+    console.error(err);
+
+    res.status(500).json({
+      msg: err.message
+    });
+
   }
 };
 
@@ -96,43 +149,39 @@ const addHolding = async (req, res) => {
 
       // Automatically recalculate base risk metrics
       const analysis = await analyzePortfolioRisk(portfolio.holdings);
-      portfolio.riskMetrics = {
-        ...analysis.metrics,
-        lastAnalyzed: new Date().toISOString(),
-        agentReport: analysis.agentReport,
-        agentLogs: analysis.agentLogs
-      };
-      portfolio.updatedAt = new Date().toISOString();
+    portfolio.holdings =
+    analysis.holdings;
 
-      dbState.writeFallbackData(data);
-      return res.json(portfolio);
+portfolio.riskMetrics = {
 
-    } else {
-      let portfolio = await Portfolio.findOne({ user: req.user.id });
-      if (!portfolio) {
-        portfolio = new Portfolio({ user: req.user.id, holdings: [] });
-      }
+    ...analysis.metrics,
 
-      const existingHolding = portfolio.holdings.find(h => h.ticker === ticker);
-      if (existingHolding) {
-        const newTotalShares = existingHolding.shares + shares;
-        const newAverageBuyPrice = ((existingHolding.shares * existingHolding.buyPrice) + (shares * buyPrice)) / newTotalShares;
-        
-        existingHolding.shares = parseFloat(newTotalShares.toFixed(4));
-        existingHolding.buyPrice = parseFloat(newAverageBuyPrice.toFixed(2));
-      } else {
-        portfolio.holdings.push({ ticker, shares, buyPrice });
-      }
+    lastAnalyzed: new Date(),
 
-      // Automatically recalculate base risk metrics
-      const analysis = await analyzePortfolioRisk(portfolio.holdings);
-      portfolio.riskMetrics = {
-        ...analysis.metrics,
-        lastAnalyzed: new Date(),
-        agentReport: analysis.agentReport,
-        agentLogs: analysis.agentLogs
-      };
-      portfolio.updatedAt = new Date();
+    agentReport:
+        analysis.agentReport,
+
+    agentLogs:
+        analysis.agentLogs
+
+};
+
+portfolio.updatedAt =
+    new Date();
+
+if (!dbState.isFallback)
+    await portfolio.save();
+
+return res.json({
+
+    ...(portfolio.toObject
+        ? portfolio.toObject()
+        : portfolio),
+
+    holdings:
+        analysis.holdings
+
+});
 
       await portfolio.save();
       return res.json(portfolio);
@@ -163,14 +212,39 @@ const removeHolding = async (req, res) => {
 
       // Recalculate metrics
       const analysis = await analyzePortfolioRisk(portfolio.holdings);
-      portfolio.riskMetrics = {
-        ...analysis.metrics,
-        lastAnalyzed: new Date().toISOString(),
-        agentReport: analysis.agentReport,
-        agentLogs: analysis.agentLogs
-      };
-      portfolio.updatedAt = new Date().toISOString();
+      portfolio.holdings =
+    analysis.holdings;
 
+portfolio.riskMetrics = {
+
+    ...analysis.metrics,
+
+    lastAnalyzed: new Date(),
+
+    agentReport:
+        analysis.agentReport,
+
+    agentLogs:
+        analysis.agentLogs
+
+};
+
+portfolio.updatedAt =
+    new Date();
+
+if (!dbState.isFallback)
+    await portfolio.save();
+
+return res.json({
+
+    ...(portfolio.toObject
+        ? portfolio.toObject()
+        : portfolio),
+
+    holdings:
+        analysis.holdings
+
+});
       dbState.writeFallbackData(data);
       return res.json(portfolio);
 
@@ -220,6 +294,7 @@ const analyzePortfolio = async (req, res) => {
       }
 
       const analysis = await analyzePortfolioRisk(portfolio.holdings);
+      portfolio.holdings =analysis.holdings;
       portfolio.riskMetrics = {
         ...analysis.metrics,
         lastAnalyzed: new Date().toISOString(),
