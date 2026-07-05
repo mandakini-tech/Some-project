@@ -131,13 +131,15 @@ holding.marketValue = value;
   
   // Calculate weights and group sectors
   holdingsMetrics.forEach(h => {
-    h.weight = totalPortfolioValue > 0 ? (h.value / totalPortfolioValue) * 100 : 0;
-    sector:
-    info.sector ||
-    info.industry ||
-    "Unknown",
-    sectorAllocations[sector] = (sectorAllocations[sector] || 0) + (h.weight / 100);
-  });
+    h.weight = totalPortfolioValue > 0
+        ? (h.value / totalPortfolioValue) * 100
+        : 0;
+
+    const sector = h.sector || "Unknown";
+
+    sectorAllocations[sector] =
+        (sectorAllocations[sector] || 0) + h.weight / 100;
+});
 
   // Align dates across all stocks to construct portfolio daily returns
   const allDates = new Set();
@@ -174,6 +176,10 @@ holding.marketValue = value;
 
   // Calculate overall portfolio metrics
   const portfolioAnnualReturn = calculateAnnualReturn(portfolioReturns);
+  console.log("Portfolio Returns:", portfolioReturns.length);
+console.log(
+    portfolioReturns.slice(0,10)
+);
   const portfolioVolatility = calculateAnnualizedVolatility(portfolioReturns);
   const portfolioBeta = calculateBeta(portfolioReturns, alignedPortfolioSpyReturns);
   const portfolioSharpe = calculateSharpeRatio(portfolioAnnualReturn, portfolioVolatility);

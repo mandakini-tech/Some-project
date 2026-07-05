@@ -5,19 +5,35 @@ const { mean, stdDev } = require('./statistics');
  * VaR = Portfolio Value * (Portfolio Volatility / sqrt(252) * Z)
  * Z = 1.645 for 95% confidence level, 2.326 for 99% confidence level.
  */
-function calculateVaR(portfolioValue, annualizedVolatility, confidenceLevel = 0.95, days = 1) {
-  if (annualizedVolatility <= 0 || portfolioValue <= 0) return 0;
+export function calculateVaR(
+    portfolioValue,
+    annualizedVolatility,
+    confidenceLevel = 0.95,
+    days = 1
+) {
+    if (portfolioValue <= 0 || annualizedVolatility <= 0)
+        return 0;
 
-  // Z-score lookup
-  let Z = 1.645; // 95%
-  if (confidenceLevel === 0.99) Z = 2.326;
-  else if (confidenceLevel === 0.90) Z = 1.282;
+    let z = 1.645;
 
-  const dailyVol = annualizedVolatility / Math.sqrt(252);
-  const timeAdjustedVol = dailyVol * Math.sqrt(days);
-  const varPercentage = timeAdjustedVol * Z;
-  
-  return portfolioValue * varPercentage;
+    if (confidenceLevel === 0.99)
+        z = 2.326;
+
+    if (confidenceLevel === 0.90)
+        z = 1.282;
+
+    const dailyVol =
+        annualizedVolatility / Math.sqrt(252);
+
+    const timeAdjustedVol =
+        dailyVol * Math.sqrt(days);
+
+    const var95 =
+        portfolioValue *
+        timeAdjustedVol *
+        z;
+
+    return Number(var95.toFixed(2));
 }
 
 /**

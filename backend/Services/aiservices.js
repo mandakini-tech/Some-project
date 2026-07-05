@@ -1,87 +1,201 @@
 import path from "node:path";
-import { ensureDataDir, tickerPaths, loadLocalOrRootCSV, readCSV, fileExists } from "../utils/fileIO.js";
+import {
+  ensureDataDir,
+  tickerPaths,
+  loadLocalOrRootCSV,
+  fileExists
+} from "../utils/fileIO.js";
+
 import { runPython } from "../utils/python.js";
-import { summarize } from "./quant.js";
+
+import {
+  summarize,
+  var95
+} from "./quant.js";
+
 import { loadInfo, retrieveNews } from "./ragNews.js";
+/* -------------------------------------------------------
+   Download local yfinance data if missing
+-------------------------------------------------------- */
 
 async function ensureLocalData(ticker) {
   await ensureDataDir();
-  const { csv, info, news } = tickerPaths(ticker);
-  const allExists = await fileExists(csv) && await fileExists(info) && await fileExists(news);
-  if (allExists) return true;
 
-  // run python downloader
-  const script = path.resolve(process.cwd(), "backend", "scripts", "download_yfinance.py");
+  const { csv, info, news } = tickerPaths(ticker);
+
+  const exists =
+    (await fileExists(csv)) &&
+    (await fileExists(info)) &&
+    (await fileExists(news));
+
+  if (exists) return true;
+
+  const script = path.resolve(
+    process.cwd(),
+    "backend",
+    "scripts",
+    "download_yfinance.py"
+  );
+
   try {
     await runPython([script, ticker]);
     return true;
-  } catch (e) {
-  console.error("Python download failed:", e);
-  return false;
+  } catch (err) {
+    console.error(
+      `Failed downloading ${ticker}:`,
+      err.message
+    );
+    return false;
+  }
 }
-}
+
+/* -------------------------------------------------------
+   Analyze Single Stock
+-------------------------------------------------------- */
 
 export async function analyzeTicker(ticker) {
-  const t = ticker.toUpperCase();
-  const got = await ensureLocalData(t);
+  const symbol = ticker.toUpperCase();
 
-  // Load asset CSV (from local or root fallback)
+  await ensureLocalData(symbol);
+
   let assetRows;
 
-try {
-  assetRows = await loadLocalOrRootCSV(t);
-} catch (err) {
-  console.error("CSV loading failed:", err);
-  throw err;
-}
+  try {
+    assetRows = await loadLocalOrRootCSV(symbol);
+  } catch (err) {
+    console.error(
+      "Unable to load CSV:",
+      symbol,
+      err.message
+    );
+    throw err;
+  }
 
-  // Ensure SPY for market
-  await ensureLocalData("SPY").catch(()=>{});
+  await ensureLocalData("SPY").catch(() => {});
+
   let spyRows;
-  try { spyRows = await loadLocalOrRootCSV("SPY"); }
-  catch { spyRows = assetRows.slice(0, 252).map(r=>({ ...r })); } // weak fallback
+
+  try {
+    spyRows = await loadLocalOrRootCSV("SPY");
+  } catch {
+    spyRows = assetRows;
+  }
 
   const stats = summarize(assetRows, spyRows);
-  const info = await loadInfo(t);
-  const topNews = await retrieveNews(t, 5);
 
-  // Decision report (minimal rule-based)
-  const riskNote = [
-    stats.beta > 1.2 ? "Beta > 1.2 (more sensitive than market)." :
-    stats.beta < 0.8 ? "Beta < 0.8 (less sensitive than market)." :
-    "Beta near 1 (market-like).",
-    stats.volatilityAnnualized > 0.35 ? "Elevated annualized volatility." :
-    stats.volatilityAnnualized < 0.20 ? "Moderate annualized volatility." : "Typical volatility.",
-    `1-day 95% VaR ≈ ${(stats.var95*100).toFixed(2)}% (historical).`
-  ].join(" ");
+  const info = await loadInfo(symbol);
 
-  const newsBullets = topNews.map(n => `- ${n.title} (${n.publisher})`).join("\n");
+  const news = await retrieveNews(symbol, 5);
 
-  const md = [
-    `# ${info.longName || t} (${t}) — Risk Snapshot`,
-    ``,
-    `- Sector: ${info.sector || "N/A"} | Industry: ${info.industry || "N/A"}`,
-    `- Last Price: ${stats.lastPrice ?? "N/A"}`,
-    `- Beta (vs SPY): ${stats.beta.toFixed(2)}`,
-    `- Volatility (ann.): ${(stats.volatilityAnnualized*100).toFixed(2)}%`,
-    `- 1-day 95% VaR: ${(stats.var95*100).toFixed(2)}%`,
-    ``,
-    `## Interpretation`,
-    riskNote,
-    ``,
-    `## Recent News`,
-    newsBullets || "_No recent headlines found_"
+  /* ---------------- Decision Summary ---------------- */
+
+  const interpretation = [];
+
+  if (stats.beta > 1.2)
+    interpretation.push(
+      "High beta indicates greater market sensitivity."
+    );
+  else if (stats.beta < 0.8)
+    interpretation.push(
+      "Low beta indicates defensive characteristics."
+    );
+  else
+    interpretation.push(
+      "Beta close to market average."
+    );
+
+  if (stats.volatilityAnnualized > 0.35)
+    interpretation.push(
+      "Historical volatility is high."
+    );
+  else if (stats.volatilityAnnualized < 0.20)
+    interpretation.push(
+      "Historical volatility is relatively low."
+    );
+  else
+    interpretation.push(
+      "Historical volatility is moderate."
+    );
+
+  if (stats.sharpeRatio > 1)
+    interpretation.push(
+      "Risk-adjusted return is strong."
+    );
+  else if (stats.sharpeRatio > 0)
+    interpretation.push(
+      "Risk-adjusted return is acceptable."
+    );
+  else
+    interpretation.push(
+      "Risk-adjusted return is weak."
+    );
+
+  const markdown = [
+
+    `# ${info.longName || symbol} (${symbol})`,
+
+    "",
+
+    `Sector: ${info.sector || "N/A"}`,
+
+    `Industry: ${info.industry || "N/A"}`,
+
+    "",
+
+    `Current Price: $${stats.lastPrice?.toFixed(2)}`,
+
+    `Beta: ${stats.beta.toFixed(2)}`,
+
+    `Annual Return: ${(stats.annualReturn * 100).toFixed(2)}%`,
+
+    `Annual Volatility: ${(stats.volatilityAnnualized * 100).toFixed(2)}%`,
+
+    `Sharpe Ratio: ${stats.sharpeRatio.toFixed(2)}`,
+
+    `Maximum Drawdown: ${(stats.maxDrawdown * 100).toFixed(2)}%`,
+
+    `1-Day VaR (95%): ${(stats.var95 * 100).toFixed(2)}%`,
+
+    "",
+
+    "## Interpretation",
+
+    interpretation.join(" "),
+
+    "",
+
+    "## Recent News",
+
+    ...(news.length
+      ? news.map(
+          n =>
+            `- ${n.title} (${n.publisher})`
+        )
+      : ["No recent news available."])
+
   ].join("\n");
 
   return {
-    ticker: t,
+
+    ticker: symbol,
+
     info,
+
     stats,
-    news: topNews,
-    reportMarkdown: md
+
+    news,
+
+    reportMarkdown: markdown
+
   };
 }
+
+/* ===========================================================
+   PART 2 STARTS HERE
+   Next message will contain analyzePortfolioRisk()
+=========================================================== */
 export async function analyzePortfolioRisk(holdings = []) {
+
   if (!holdings.length) {
     return {
       metrics: {
@@ -103,24 +217,37 @@ export async function analyzePortfolioRisk(holdings = []) {
 
   let totalValue = 0;
 
+  //----------------------------------------------------
+  // Analyze every holding
+  //----------------------------------------------------
+
   for (const holding of holdings) {
+
     try {
-      const result = await analyzeTicker(holding.ticker);
+
+      const result =
+        await analyzeTicker(holding.ticker);
 
       const currentPrice =
-        Number(result.stats.lastPrice) || Number(holding.buyPrice);
+        Number(result.stats.lastPrice) ||
+        Number(holding.buyPrice);
 
       const currentValue =
-        Number(holding.shares) * currentPrice;
+        Number(holding.shares) *
+        currentPrice;
 
       totalValue += currentValue;
 
       enrichedHoldings.push({
-        ticker: holding.ticker.toUpperCase(),
 
-        shares: Number(holding.shares),
+        ticker:
+          holding.ticker.toUpperCase(),
 
-        buyPrice: Number(holding.buyPrice),
+        shares:
+          Number(holding.shares),
+
+        buyPrice:
+          Number(holding.buyPrice),
 
         currentPrice,
 
@@ -144,97 +271,134 @@ export async function analyzePortfolioRisk(holdings = []) {
         volatility:
           result.stats.volatilityAnnualized || 0,
 
-        valueAtRisk:
-          result.stats.var95 || 0,
-
         annualReturn:
           result.stats.annualReturn || 0,
 
+        sharpeRatio:
+          result.stats.sharpeRatio || 0,
+
+        maxDrawdown:
+          result.stats.maxDrawdown || 0,
+
+        valueAtRisk:
+          result.stats.var95 || 0,
+
         report:
           result.reportMarkdown
+
       });
 
-    } catch (err) {
+    }
+
+    catch (err) {
 
       console.error(
-        "Analysis failed:",
+        "Ticker Analysis Failed:",
         holding.ticker,
         err.message
       );
 
       enrichedHoldings.push({
-        ticker: holding.ticker,
 
-        shares: holding.shares,
+        ticker:
+          holding.ticker,
 
-        buyPrice: holding.buyPrice,
+        shares:
+          Number(holding.shares),
 
-        currentPrice: holding.buyPrice,
+        buyPrice:
+          Number(holding.buyPrice),
+
+        currentPrice:
+          Number(holding.buyPrice),
 
         currentValue:
-          holding.buyPrice * holding.shares,
+          Number(holding.buyPrice) *
+          Number(holding.shares),
 
-        sector: "Unknown",
+        sector:
+          "Unknown",
 
-        industry: "Unknown",
+        industry:
+          "Unknown",
 
-        longName: holding.ticker,
+        longName:
+          holding.ticker,
 
         beta: 0,
 
         volatility: 0,
 
-        valueAtRisk: 0,
-
         annualReturn: 0,
 
-        report: `Unable to analyze ${holding.ticker}`
+        sharpeRatio: 0,
+
+        maxDrawdown: 0,
+
+        valueAtRisk: 0,
+
+        report:
+          `Unable to analyze ${holding.ticker}`
+
       });
+
     }
+
   }
 
-  //---------------------------------------------------
+  //----------------------------------------------------
   // Portfolio aggregation
-  //---------------------------------------------------
+  //----------------------------------------------------
 
   let beta = 0;
 
-  let volatilitySquared = 0;
-
-  let var95 = 0;
-
   let annualReturn = 0;
 
-  for (const h of enrichedHoldings) {
+  let volatilitySquared = 0;
+
+  let sharpeWeighted = 0;
+
+  for (const holding of enrichedHoldings) {
 
     const weight =
       totalValue > 0
-        ? h.currentValue / totalValue
+        ? holding.currentValue / totalValue
         : 0;
 
     beta +=
-      weight * h.beta;
+      weight *
+      holding.beta;
+
+    annualReturn +=
+      weight *
+      holding.annualReturn;
+
+    sharpeWeighted +=
+      weight *
+      holding.sharpeRatio;
 
     volatilitySquared +=
       Math.pow(
-        weight * h.volatility,
+        weight *
+        holding.volatility,
         2
       );
 
-    var95 +=
-      weight * h.valueAtRisk;
-
-    annualReturn +=
-      weight * h.annualReturn;
   }
 
   const volatility =
     Math.sqrt(volatilitySquared);
 
-  const sharpeRatio =
-    volatility > 0
-      ? annualReturn / volatility
-      : 0;
+const portfolioVaR =
+    totalValue *
+    (volatility / Math.sqrt(252)) *
+    1.645;
+  const maxDrawdown =
+    Math.max(
+      ...enrichedHoldings.map(
+        h => h.maxDrawdown
+      )
+    );
 
   const sectorCount =
     new Set(
@@ -249,6 +413,146 @@ export async function analyzePortfolioRisk(holdings = []) {
       sectorCount * 25
     );
 
+  const sharpeRatio =
+    volatility > 0
+      ? Number(
+          (
+            (annualReturn - 0.04) /
+            volatility
+          ).toFixed(2)
+        )
+      : 0;
+
+  //----------------------------------------------------
+  // Agent Logs
+  //----------------------------------------------------
+
+  const logs = [];
+
+  logs.push(
+    "Market Agent ▶ Loading historical prices..."
+  );
+
+  logs.push(
+    `Market Agent ▶ Loaded ${enrichedHoldings.length} assets`
+  );
+
+  logs.push(
+    "Market Agent ▶ Computing portfolio statistics..."
+  );
+
+  logs.push(
+    `Market Agent ▶ Portfolio Beta = ${beta.toFixed(2)}`
+  );
+
+  logs.push(
+    `Market Agent ▶ Annual Return = ${(annualReturn * 100).toFixed(2)}%`
+  );
+
+  logs.push(
+    `Market Agent ▶ Annual Volatility = ${(volatility * 100).toFixed(2)}%`
+  );
+
+  logs.push(
+    `Market Agent ▶ Sharpe Ratio = ${sharpeRatio}`
+  );
+
+  logs.push(
+    `Market Agent ▶ Max Drawdown = ${(maxDrawdown * 100).toFixed(2)}%`
+  );
+
+  logs.push(
+    `Market Agent ▶ Portfolio VaR = $${portfolioVaR}`
+  );
+    //----------------------------------------------------
+  // Decision Agent
+  //----------------------------------------------------
+
+  let riskLevel = "Low";
+
+  if (beta > 1.2 || volatility > 0.35)
+    riskLevel = "High";
+  else if (beta > 0.8 || volatility > 0.20)
+    riskLevel = "Moderate";
+
+  logs.push(
+    "Decision Agent ▶ Evaluating portfolio risk..."
+  );
+
+  logs.push(
+    `Decision Agent ▶ Overall Risk = ${riskLevel}`
+  );
+
+  //----------------------------------------------------
+  // Recommendation Agent
+  //----------------------------------------------------
+
+  const recommendations = [];
+
+  if (riskLevel === "High") {
+    recommendations.push(
+      "Reduce exposure to high-beta assets."
+    );
+  }
+
+  if (diversificationScore < 50) {
+    recommendations.push(
+      "Increase sector diversification."
+    );
+  }
+
+  if (sharpeRatio < 0.5) {
+    recommendations.push(
+      "Improve risk-adjusted return by balancing defensive and growth stocks."
+    );
+  }
+
+  if (annualReturn < 0) {
+    recommendations.push(
+      "Portfolio has negative historical return. Review underperforming holdings."
+    );
+  }
+
+  if (recommendations.length === 0) {
+    recommendations.push(
+      "Portfolio appears well balanced."
+    );
+  }
+
+  logs.push(
+    "Recommendation Agent ▶ Generating portfolio recommendations..."
+  );
+
+  recommendations.forEach(r =>
+    logs.push(`Recommendation Agent ▶ ${r}`)
+  );
+
+  logs.push(
+    "Portfolio analysis completed successfully."
+  );
+
+  //----------------------------------------------------
+  // Final Report
+  //----------------------------------------------------
+
+  const report = [
+    `Portfolio Value : $${totalValue.toFixed(2)}`,
+    `Portfolio Beta : ${beta.toFixed(2)}`,
+    `Annual Return : ${(annualReturn * 100).toFixed(2)}%`,
+    `Annual Volatility : ${(volatility * 100).toFixed(2)}%`,
+    `Sharpe Ratio : ${sharpeRatio}`,
+    `Maximum Drawdown : ${(maxDrawdown * 100).toFixed(2)}%`,
+    `95% VaR : $${portfolioVaR}`,
+    `Diversification Score : ${diversificationScore}/100`,
+    "",
+    "Recommendations:",
+    ...recommendations.map(r => `• ${r}`)
+  ].join("\n");
+
+  //----------------------------------------------------
+  // Return
+  //----------------------------------------------------
+
   return {
 
     metrics: {
@@ -257,7 +561,7 @@ export async function analyzePortfolioRisk(holdings = []) {
 
       volatility,
 
-      valueAtRisk: var95,
+      valueAtRisk: portfolioVaR,
 
       diversificationScore,
 
@@ -265,22 +569,16 @@ export async function analyzePortfolioRisk(holdings = []) {
 
       sharpeRatio,
 
-      maxDrawdown: 0,
+      maxDrawdown
 
     },
 
-    holdings:
-      enrichedHoldings,
+    holdings: enrichedHoldings,
 
-    agentReport:
-      `Portfolio analyzed successfully with ${enrichedHoldings.length} holdings.`,
+    agentReport: report,
 
-    agentLogs: [
+    agentLogs: logs
 
-      `Processed ${enrichedHoldings.length} holdings.`,
-
-      "Risk metrics calculated.",
-
-    ]
   };
+
 }

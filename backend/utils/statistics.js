@@ -63,8 +63,14 @@ function calculateBeta(stockReturns, marketReturns) {
  * Calculate Annual Return (assuming 252 trading days)
  */
 function calculateAnnualReturn(dailyReturns) {
-  if (!dailyReturns || dailyReturns.length === 0) return 0;
-  return mean(dailyReturns) * 252;
+
+    if (!dailyReturns.length)
+        return 0;
+
+    const avg =
+        mean(dailyReturns);
+
+    return avg * 252;
 }
 
 /**
@@ -78,33 +84,51 @@ function calculateAnnualizedVolatility(dailyReturns) {
 /**
  * Calculate Sharpe Ratio (assuming standard 4% risk-free rate)
  */
-function calculateSharpeRatio(annualReturn, annualizedVolatility, riskFreeRate = 0.04) {
-  if (annualizedVolatility <= 0) return 0;
-  return (annualReturn - riskFreeRate) / annualizedVolatility;
+function calculateSharpeRatio(
+    annualReturn,
+    annualizedVolatility,
+    riskFreeRate = 0.04
+) {
+
+    if (
+        annualizedVolatility <= 0 ||
+        !isFinite(annualizedVolatility)
+    )
+        return 0;
+
+    return Number(
+        (
+            (annualReturn - riskFreeRate) /
+            annualizedVolatility
+        ).toFixed(2)
+    );
 }
 
 /**
  * Calculate Maximum Drawdown of price history
  * prices: array of numbers (e.g. closing prices chronologically)
  */
-function calculateMaxDrawdown(prices) {
-  if (!prices || prices.length <= 1) return 0;
+function calculateMaxDrawdown(prices){
 
-  let peak = -Infinity;
-  let maxDrawdown = 0;
+    if(prices.length<2)
+        return 0;
 
-  for (let i = 0; i < prices.length; i++) {
-    const price = prices[i];
-    if (price > peak) {
-      peak = price;
+    let peak=prices[0];
+    let maxDD=0;
+
+    for(const price of prices){
+
+        if(price>peak)
+            peak=price;
+
+        const dd=
+            (peak-price)/peak;
+
+        if(dd>maxDD)
+            maxDD=dd;
     }
-    const drawdown = peak > 0 ? (price - peak) / peak : 0;
-    if (drawdown < maxDrawdown) {
-      maxDrawdown = drawdown;
-    }
-  }
 
-  return maxDrawdown; // returns negative value (e.g., -0.18 for -18%)
+    return maxDD;
 }
 
 /**
