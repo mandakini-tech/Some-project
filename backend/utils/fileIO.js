@@ -2,9 +2,13 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { parse } from "csv-parse/sync";
 
-const projectRoot = path.resolve(process.cwd(), "..");
+import { fileURLToPath } from "node:url";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const projectRoot = path.resolve(__dirname, "..", "..");
 const dataDir = path.join(projectRoot, "backend", "data");
 const rootCsvPath = path.join(projectRoot, "StockPriceDataset.csv");
+
 
 export async function ensureDataDir() {
   await fs.mkdir(dataDir, { recursive: true });

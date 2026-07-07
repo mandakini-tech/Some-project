@@ -1,4 +1,5 @@
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   ensureDataDir,
   tickerPaths,
@@ -14,6 +15,9 @@ import {
 } from "./quant.js";
 
 import { loadInfo, retrieveNews } from "./ragNews.js";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
 /* -------------------------------------------------------
    Download local yfinance data if missing
 -------------------------------------------------------- */
@@ -31,8 +35,8 @@ async function ensureLocalData(ticker) {
   if (exists) return true;
 
   const script = path.resolve(
-    process.cwd(),
-    "backend",
+    __dirname,
+    "..",
     "scripts",
     "download_yfinance.py"
   );
